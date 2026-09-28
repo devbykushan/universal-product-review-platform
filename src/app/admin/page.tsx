@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
+import { ImageUploader } from '@/components/ImageUploader';
 import { Product, CategoryMetric, Category } from '@/types';
 import {
   SlidersHorizontal,
@@ -739,16 +740,12 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                Image URL
-              </label>
-              <input
-                type="text"
-                required
+            <div className="md:col-span-2">
+              <ImageUploader
                 value={pImage}
-                onChange={(e) => setPImage(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                onChange={setPImage}
+                label="Product Hero Image"
+                helperText="Upload a product photo directly from your device (PNG, JPG, WebP) or specify an image URL."
               />
             </div>
           </div>
