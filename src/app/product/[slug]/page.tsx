@@ -66,6 +66,22 @@ export default function ProductReviewPage() {
     }
   };
 
+  const handleAffiliateClick = (storeName: string, url: string) => {
+    try {
+      fetch('/api/analytics/affiliate-click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          storeName,
+          url,
+        }),
+      });
+    } catch {
+      // Ignore background analytics errors
+    }
+  };
+
   return (
     <div className="space-y-12 pb-24">
       {/* Automated SEO JSON-LD schema injection */}
@@ -257,6 +273,7 @@ export default function ProductReviewPage() {
                     href={aff.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => handleAffiliateClick(aff.storeName, aff.url)}
                     className="flex items-center justify-between p-3 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200/80 hover:border-indigo-300 transition-all group"
                   >
                     <div className="flex items-center gap-2">
