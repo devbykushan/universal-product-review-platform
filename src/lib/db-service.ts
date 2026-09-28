@@ -12,19 +12,23 @@ export async function ensureSeeded() {
       const adminPassword = await hashPassword('admin123');
       const userPassword = await hashPassword('user123');
 
-      await prisma.user.create({
-        data: {
+      await prisma.user.upsert({
+        where: { email: 'admin@universalreview.com' },
+        update: {},
+        create: {
           id: 'admin-user-1',
           name: 'Universal Admin',
           email: 'admin@universalreview.com',
           password: adminPassword,
           role: 'admin',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200',
         },
       });
 
-      await prisma.user.create({
-        data: {
+      await prisma.user.upsert({
+        where: { email: 'kushan@example.com' },
+        update: {},
+        create: {
           id: 'demo-user-1',
           name: 'Kushan Dewmina',
           email: 'kushan@example.com',
@@ -406,4 +410,84 @@ export async function updateReviewStatus(
     data: { status },
   });
   return true;
+}
+
+// Affiliate Click Tracking & Analytics
+export async function recordAffiliateClick(params: {
+  productId: string;
+  storeName: string;
+  url: string;
+  userAgent?: string;
+  referer?: string;
+}) {
+  await ensureSeeded();
+  return prisma.affiliateClick.create({
+    data: {
+      productId: params.productId,
+      storeName: params.storeName,
+      url: params.url,
+      userAgent: params.userAgent || null,
+      referer: params.referer || null,
+    },
+  });
+}
+
+export async function getAffiliateAnalytics() {
+  await ensureSeeded();
+  const totalClicks = await prisma.affiliateClick.count();
+
+  // Group by store name
+  const clicks = await prisma.affiliateClick.findMany({
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          brand: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const storeMap: Record<string, number> = {};
+  const productMap: Record<string, { id: string; name: string; brand: string; count: number }> = {};
+
+  clicks.forEach((c) => {
+    storeMap[c.storeName] = (storeMap[c.storeName] || 0) + 1;
+    if (c.product) {
+      if (!productMap[c.product.id]) {
+        productMap[c.product.id] = {
+          id: c.product.id,
+          name: c.product.name,
+          brand: c.product.brand,
+          count: 0,
+        };
+      }
+      productMap[c.product.id].count += 1;
+    }
+  });
+
+  const byStore = Object.entries(storeMap)
+    .map(([storeName, count]) => ({ storeName, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const topProducts = Object.values(productMap)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const recentClicks = clicks.slice(0, 10).map((c) => ({
+    id: c.id,
+    storeName: c.storeName,
+    productName: c.product?.name || 'Unknown Product',
+    url: c.url,
+    createdAt: c.createdAt.toISOString(),
+  }));
+
+  return {
+    totalClicks,
+    byStore,
+    topProducts,
+    recentClicks,
+  };
 }
