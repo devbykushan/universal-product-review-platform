@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
+import { ImageUploader } from '@/components/ImageUploader';
 import { Product, CategoryMetric, Category } from '@/types';
 import {
   SlidersHorizontal,
@@ -20,6 +22,13 @@ import {
   Check,
   X,
   ExternalLink,
+  Lock,
+  Mail,
+  ArrowLeft,
+  Sparkles,
+  BarChart3,
+  MousePointerClick,
+  TrendingUp,
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -34,9 +43,37 @@ export default function AdminDashboardPage() {
     updateReviewStatus,
   } = useStore();
 
+  const { user, isLoading: isAuthLoading, login } = useAuth();
+  const [adminEmail, setAdminEmail] = useState('admin@universalreview.com');
+  const [adminPassword, setAdminPassword] = useState('admin123');
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
+
   const [activeTab, setActiveTab] = useState<
-    'products' | 'review-builder' | 'schema-builder' | 'moderation'
+    'products' | 'review-builder' | 'schema-builder' | 'moderation' | 'analytics'
   >('products');
+
+  // Affiliate Analytics State
+  const [analyticsData, setAnalyticsData] = useState<{
+    totalClicks: number;
+    byStore: { storeName: string; count: number }[];
+    topProducts: { productId: string; name: string; brand: string; count: number }[];
+    recentClicks: { id: string; storeName: string; productName: string; url: string; createdAt: string }[];
+  } | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  React.useEffect(() => {
+    if (activeTab === 'analytics') {
+      setLoadingAnalytics(true);
+      fetch('/api/analytics/affiliate-click')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) setAnalyticsData(data);
+        })
+        .catch((e) => console.warn('Analytics fetch error:', e))
+        .finally(() => setLoadingAnalytics(false));
+    }
+  }, [activeTab]);
 
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -141,9 +178,55 @@ export default function AdminDashboardPage() {
   // Dynamic scores for the chosen category
   const activeReviewCat = categories.find((c) => c.id === pCategory) || categories[0];
   const [dynamicScores, setDynamicScores] = useState<Record<string, number>>({});
-
   const handleScoreChange = (metricKey: string, val: number) => {
     setDynamicScores((prev) => ({ ...prev, [metricKey]: val }));
+  };
+
+  const [isGeneratingAiDraft, setIsGeneratingAiDraft] = useState(false);
+
+  const handleGenerateAiDraft = async () => {
+    if (!pName.trim() || !pBrand.trim()) {
+      alert('Please enter a Product Name and Brand first so Gemini AI can draft the review.');
+      return;
+    }
+
+    setIsGeneratingAiDraft(true);
+    try {
+      const activeCat = categories.find((c) => c.id === pCategory) || categories[0];
+      const res = await fetch('/api/ai/generate-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: pName.trim(),
+          brand: pBrand.trim(),
+          categoryName: activeCat?.name || 'General',
+          subcategory: pSubcategory.trim() || activeCat?.subcategories[0] || 'General',
+          price: Number(pPrice) || 99,
+          metrics: activeCat?.metrics || [],
+        }),
+      });
+
+      if (res.ok) {
+        const draft = await res.json();
+        if (draft.overallScore) setPScore(draft.overallScore);
+        if (draft.verdictShort) setPVerdictShort(draft.verdictShort);
+        if (draft.verdictDetail) setPVerdictDetail(draft.verdictDetail);
+        if (draft.theGood) setPPros(draft.theGood.join('\n'));
+        if (draft.theBad) setPCons(draft.theBad.join('\n'));
+        if (draft.targetAudience) setPTarget(draft.targetAudience);
+        if (draft.skipAudience) setPSkip(draft.skipAudience);
+        if (draft.dynamicScores) {
+          setDynamicScores(draft.dynamicScores);
+        }
+        showToast(`✨ Generated review draft with Gemini AI for ${pName}!`);
+      } else {
+        alert('Could not generate draft. Please ensure you are logged in as admin.');
+      }
+    } catch (e) {
+      console.error('Error generating AI review draft:', e);
+    } finally {
+      setIsGeneratingAiDraft(false);
+    }
   };
 
   const handlePublishProductAndReview = (e: React.FormEvent) => {
@@ -241,6 +324,123 @@ export default function AdminDashboardPage() {
     setPVerdictDetail('');
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm font-semibold text-slate-600">Verifying administrator credentials...</p>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'admin') {
+    const handleAdminLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setAdminAuthError(null);
+      setAdminSubmitting(true);
+      const res = await login(adminEmail, adminPassword);
+      if (!res.success) {
+        setAdminAuthError(res.error || 'Invalid administrator credentials');
+      }
+      setAdminSubmitting(false);
+    };
+
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-xl p-8 text-center">
+          <div className="inline-flex p-4 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 mb-4">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Admin CMS Restricted Area</h2>
+          <p className="text-xs text-slate-500 mt-2 mb-6">
+            This module is reserved for editorial staff and administrators. Please authenticate with administrator credentials to manage products, categories, and reviews.
+          </p>
+
+          {user && user.role !== 'admin' && (
+            <div className="mb-6 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-left text-xs text-amber-800">
+              <p className="font-bold">Logged in as {user.name} (Member)</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Your account does not possess administrative privileges. Please log in with the administrator account below.
+              </p>
+            </div>
+          )}
+
+          {adminAuthError && (
+            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 text-left flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{adminAuthError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Admin Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Admin Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={adminSubmitting}
+              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-200 transition-all disabled:opacity-50"
+            >
+              {adminSubmitting ? 'Authenticating...' : 'Sign In as Administrator'}
+            </button>
+          </form>
+
+          {/* 1-Click Demo Fill */}
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              Default Admin Demo Access
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setAdminEmail('admin@universalreview.com');
+                setAdminPassword('admin123');
+              }}
+              className="w-full p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center justify-between"
+            >
+              <span>admin@universalreview.com</span>
+              <span className="font-mono text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-700">admin123</span>
+            </button>
+          </div>
+
+          <div className="mt-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Public Platform
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Toast Notification */}
@@ -322,6 +522,18 @@ export default function AdminDashboardPage() {
         >
           <ShieldCheck className="w-4 h-4" />
           Community Moderation Queue ({reviews.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`pb-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === 'analytics'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Affiliate & SEO Analytics
         </button>
       </div>
 
@@ -428,6 +640,34 @@ export default function AdminDashboardPage() {
             </p>
           </div>
 
+          {/* Gemini AI Review Assistant Bar */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  Gemini AI Review Co-Pilot
+                  <span className="text-[10px] font-extrabold uppercase bg-indigo-600 text-white px-2 py-0.5 rounded-full">GenAI</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Type the Product Name & Brand, then click to auto-draft laboratory verdicts, pros, cons, and dynamic metrics.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateAiDraft}
+              disabled={isGeneratingAiDraft}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all disabled:opacity-50 shrink-0"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isGeneratingAiDraft ? 'animate-spin' : ''}`} />
+              <span>{isGeneratingAiDraft ? 'Generating Draft...' : 'Auto-Draft with Gemini AI'}</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
@@ -500,16 +740,12 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                Image URL
-              </label>
-              <input
-                type="text"
-                required
+            <div className="md:col-span-2">
+              <ImageUploader
                 value={pImage}
-                onChange={(e) => setPImage(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                onChange={setPImage}
+                label="Product Hero Image"
+                helperText="Upload a product photo directly from your device (PNG, JPG, WebP) or specify an image URL."
               />
             </div>
           </div>
@@ -961,6 +1197,181 @@ export default function AdminDashboardPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: Affiliate & SEO Analytics */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-8 animate-fadeIn">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Affiliate Outbound Clicks & Conversion Analytics
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Real-time telemetry on user outbound clicks to Amazon, Official Stores, and retail partners.
+            </p>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Total Outbound Clicks</span>
+                <MousePointerClick className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900">
+                {analyticsData?.totalClicks ?? 0}
+              </div>
+              <p className="text-[11px] text-emerald-600 font-semibold mt-1">
+                ↑ Real-time tracked events
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Retail Partners</span>
+                <Package className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900">
+                {analyticsData?.byStore.length ?? 0}
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-1">
+                Active affiliate merchants
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Sitemap URLs Indexed</span>
+                <BarChart3 className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900">
+                {products.length + categories.length + 2}
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-1">
+                Dynamic sitemap.xml generated
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Est. Conversion Rate</span>
+                <TrendingUp className="w-4 h-4 text-amber-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900">
+                9.4%
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-1">
+                Benchmark affiliate intent
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* By Store Breakdown */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                Clicks by Retail Partner
+              </h3>
+              {analyticsData?.byStore && analyticsData.byStore.length > 0 ? (
+                <div className="space-y-3">
+                  {analyticsData.byStore.map((store) => {
+                    const pct = analyticsData.totalClicks > 0
+                      ? Math.round((store.count / analyticsData.totalClicks) * 100)
+                      : 0;
+                    return (
+                      <div key={store.storeName} className="space-y-1">
+                        <div className="flex justify-between text-xs font-semibold text-slate-800">
+                          <span>{store.storeName}</span>
+                          <span>{store.count} clicks ({pct}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-indigo-600 rounded-full"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No clicks recorded yet. Click &quot;Where to Buy&quot; affiliate buttons on review pages to record telemetry.
+                </p>
+              )}
+            </div>
+
+            {/* Top Clicked Products */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                Top Generating Products
+              </h3>
+              {analyticsData?.topProducts && analyticsData.topProducts.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {analyticsData.topProducts.map((p, idx) => (
+                    <div key={p.productId} className="py-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-slate-100 font-bold text-slate-600 flex items-center justify-center text-[10px]">
+                          #{idx + 1}
+                        </span>
+                        <div>
+                          <p className="font-bold text-slate-900">{p.name}</p>
+                          <p className="text-[10px] text-slate-400">{p.brand}</p>
+                        </div>
+                      </div>
+                      <span className="font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {p.count} clicks
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No product clicks recorded yet.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Live Recent Click Feed */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Live Click Activity Feed
+            </h3>
+            {analyticsData?.recentClicks && analyticsData.recentClicks.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 uppercase text-[10px]">
+                      <th className="py-2 font-bold">Product</th>
+                      <th className="py-2 font-bold">Store</th>
+                      <th className="py-2 font-bold">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {analyticsData.recentClicks.map((click) => (
+                      <tr key={click.id} className="hover:bg-slate-50/50">
+                        <td className="py-2.5 font-semibold text-slate-900">{click.productName}</td>
+                        <td className="py-2.5">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded font-medium text-slate-700">
+                            {click.storeName}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-slate-400 text-[11px]">
+                          {new Date(click.createdAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 py-4 text-center">
+                Click logs will appear here when visitors click outbound affiliate links.
+              </p>
+            )}
           </div>
         </div>
       )}

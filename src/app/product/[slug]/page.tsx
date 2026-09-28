@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { StarRating } from '@/components/StarRating';
 import { QuickVerdictCard } from '@/components/QuickVerdictCard';
+import { AiVerdictCard } from '@/components/AiVerdictCard';
 import { DynamicScoreRadar } from '@/components/DynamicScoreRadar';
 import { CommunityReviewsList } from '@/components/CommunityReviewsList';
 import { ReviewJsonLd } from '@/components/ReviewJsonLd';
@@ -29,7 +30,7 @@ import {
 export default function ProductReviewPage() {
   const params = useParams();
   const slug = params?.slug as string;
-  const { products, categories, toggleCompare, isInCompare } = useStore();
+  const { products, categories, reviews, toggleCompare, isInCompare } = useStore();
 
   const product = products.find((p) => p.slug === slug);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -55,12 +56,29 @@ export default function ProductReviewPage() {
 
   const category = categories.find((c) => c.id === product.categoryId);
   const inCompare = isInCompare(product.id);
+  const productReviews = reviews.filter((r) => r.productId === product.id && r.status === 'approved');
 
   const handleShare = () => {
     if (typeof window !== 'undefined') {
       navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleAffiliateClick = (storeName: string, url: string) => {
+    try {
+      fetch('/api/analytics/affiliate-click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          storeName,
+          url,
+        }),
+      });
+    } catch {
+      // Ignore background analytics errors
     }
   };
 
@@ -255,6 +273,7 @@ export default function ProductReviewPage() {
                     href={aff.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => handleAffiliateClick(aff.storeName, aff.url)}
                     className="flex items-center justify-between p-3 rounded-xl bg-white hover:bg-indigo-50/60 border border-slate-200/80 hover:border-indigo-300 transition-all group"
                   >
                     <div className="flex items-center gap-2">
@@ -284,6 +303,9 @@ export default function ProductReviewPage() {
 
       {/* Main Review Body Layout */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+        {/* Module 1 Part 1.5: Gemini AI Consensus & Synthesis */}
+        <AiVerdictCard product={product} communityReviews={productReviews} />
+
         {/* Module 1 Part 2: Quick Verdict Card (TL;DR) */}
         <QuickVerdictCard
           verdictShort={product.editorialReview.verdictShort}

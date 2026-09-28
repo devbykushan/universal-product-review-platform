@@ -1,0 +1,85 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Category {
+  id            String    @id
+  name          String
+  slug          String    @unique
+  icon          String
+  description   String
+  subcategories String    // JSON string array
+  metrics       String    // JSON string array of CategoryMetric
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  products      Product[]
+}
+
+model Product {
+  id                     String            @id
+  slug                   String            @unique
+  name                   String
+  brand                  String
+  categoryId             String
+  subcategory            String
+  images                 String            // JSON string array of image URLs
+  releaseYear            Int
+  priceEstimate          Float
+  currency               String            @default("USD")
+  tags                   String            // JSON string array of tags
+  specs                  String            // JSON string array of SpecificationItem
+  affiliateLinks         String            // JSON string array of AffiliateLink
+  editorialReview        String            // JSON string of EditorialReview
+  communityReviewCount   Int               @default(0)
+  communityRatingAverage Float             @default(0)
+  editorsChoice          Boolean           @default(false)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  category               Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  reviews                CommunityReview[]
+  affiliateClicks        AffiliateClick[]
+}
+
+model CommunityReview {
+  id            String    @id
+  productId     String
+  userName      String
+  userAvatar    String?
+  rating        Float
+  metricScores  String?   // JSON string of metric key -> number
+  title         String
+  comment       String
+  verifiedBuyer Boolean   @default(false)
+  helpfulCount  Int       @default(0)
+  status        String    @default("approved") // approved, pending, flagged
+  photos        String?   // JSON string array
+  createdAt     DateTime  @default(now())
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user") // "user" | "admin" | "editor"
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AffiliateClick {
+  id        String   @id @default(cuid())
+  productId String
+  storeName String
+  url       String
+  userAgent String?
+  referer   String?
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
