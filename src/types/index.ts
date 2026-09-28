@@ -1,3 +1,11 @@
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin' | 'editor';
+  avatar?: string;
+}
+
 export interface CategoryMetric {
   key: string;
   label: string;

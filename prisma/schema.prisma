@@ -60,3 +60,14 @@ model CommunityReview {
   createdAt     DateTime  @default(now())
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user") // "user" | "admin" | "editor"
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,10 +1,40 @@
 import { prisma } from './prisma';
 import { Category, Product, CommunityReview, CategoryMetric } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_COMMUNITY_REVIEWS } from '../data/mockData';
+import { hashPassword } from './auth';
 
 // Helper to seed initial data if DB is empty
 export async function ensureSeeded() {
   try {
+    // Seed default users if empty
+    const userCount = await prisma.user.count();
+    if (userCount === 0) {
+      const adminPassword = await hashPassword('admin123');
+      const userPassword = await hashPassword('user123');
+
+      await prisma.user.create({
+        data: {
+          id: 'admin-user-1',
+          name: 'Universal Admin',
+          email: 'admin@universalreview.com',
+          password: adminPassword,
+          role: 'admin',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+        },
+      });
+
+      await prisma.user.create({
+        data: {
+          id: 'demo-user-1',
+          name: 'Kushan Dewmina',
+          email: 'kushan@example.com',
+          password: userPassword,
+          role: 'user',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        },
+      });
+    }
+
     const categoryCount = await prisma.category.count();
     if (categoryCount > 0) return;
 

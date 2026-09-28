@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { CommunityReview, CategoryMetric } from '../types';
 import { StarRating } from './StarRating';
 import { useStore } from '../lib/store';
-import { ThumbsUp, ShieldCheck, MessageSquarePlus, Check, X } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
+import { ThumbsUp, ShieldCheck, MessageSquarePlus, Check, X, User } from 'lucide-react';
 
 interface CommunityReviewsListProps {
   productId: string;
@@ -17,11 +18,12 @@ export function CommunityReviewsList({
   metrics,
 }: CommunityReviewsListProps) {
   const { reviews, addCommunityReview, voteHelpful } = useStore();
+  const { user, openAuthModal } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [votedIds, setVotedIds] = useState<Record<string, boolean>>({});
 
   // Review Form State
-  const [userName, setUserName] = useState('');
+  const [userName, setUserName] = useState(user?.name || '');
   const [title, setTitle] = useState('');
   const [comment, setComment] = useState('');
   const [rating, setRating] = useState(5);
@@ -37,6 +39,14 @@ export function CommunityReviewsList({
   const productReviews = reviews.filter(
     (r) => r.productId === productId && r.status === 'approved'
   );
+
+  const handleOpenModal = () => {
+    if (user) {
+      setUserName(user.name);
+      setVerifiedBuyer(true);
+    }
+    setShowModal(true);
+  };
 
   const handleVote = (reviewId: string) => {
     if (votedIds[reviewId]) return;
@@ -54,11 +64,11 @@ export function CommunityReviewsList({
     addCommunityReview({
       productId,
       userName: userName.trim(),
-      userAvatar: `https://images.unsplash.com/photo-${1535713875000 + Math.floor(Math.random() * 500)}?auto=format&fit=crop&w=150&q=80`,
+      userAvatar: user?.avatar || `https://images.unsplash.com/photo-${1535713875000 + Math.floor(Math.random() * 500)}?auto=format&fit=crop&w=150&q=80`,
       rating,
       title: title.trim(),
       comment: comment.trim(),
-      verifiedBuyer,
+      verifiedBuyer: Boolean(user) || verifiedBuyer,
       metricScores,
     });
 
@@ -78,7 +88,7 @@ export function CommunityReviewsList({
         </div>
 
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleOpenModal}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all hover:shadow"
         >
           <MessageSquarePlus className="w-4 h-4" />
@@ -187,6 +197,31 @@ export function CommunityReviewsList({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* User status callout */}
+            {user ? (
+              <div className="p-3 mt-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs text-emerald-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Posting with authenticated profile: <strong>{user.name}</strong> (Verified Reviewer)</span>
+              </div>
+            ) : (
+              <div className="p-3 mt-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs text-indigo-900">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Want a <strong>Verified Reviewer</strong> badge?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false);
+                    openAuthModal('login');
+                  }}
+                  className="font-bold text-indigo-600 hover:text-indigo-800 underline ml-2"
+                >
+                  Sign In
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <div>
