@@ -24,6 +24,7 @@ import {
   Lock,
   Mail,
   ArrowLeft,
+  Sparkles,
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -151,9 +152,55 @@ export default function AdminDashboardPage() {
   // Dynamic scores for the chosen category
   const activeReviewCat = categories.find((c) => c.id === pCategory) || categories[0];
   const [dynamicScores, setDynamicScores] = useState<Record<string, number>>({});
-
   const handleScoreChange = (metricKey: string, val: number) => {
     setDynamicScores((prev) => ({ ...prev, [metricKey]: val }));
+  };
+
+  const [isGeneratingAiDraft, setIsGeneratingAiDraft] = useState(false);
+
+  const handleGenerateAiDraft = async () => {
+    if (!pName.trim() || !pBrand.trim()) {
+      alert('Please enter a Product Name and Brand first so Gemini AI can draft the review.');
+      return;
+    }
+
+    setIsGeneratingAiDraft(true);
+    try {
+      const activeCat = categories.find((c) => c.id === pCategory) || categories[0];
+      const res = await fetch('/api/ai/generate-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: pName.trim(),
+          brand: pBrand.trim(),
+          categoryName: activeCat?.name || 'General',
+          subcategory: pSubcategory.trim() || activeCat?.subcategories[0] || 'General',
+          price: Number(pPrice) || 99,
+          metrics: activeCat?.metrics || [],
+        }),
+      });
+
+      if (res.ok) {
+        const draft = await res.json();
+        if (draft.overallScore) setPScore(draft.overallScore);
+        if (draft.verdictShort) setPVerdictShort(draft.verdictShort);
+        if (draft.verdictDetail) setPVerdictDetail(draft.verdictDetail);
+        if (draft.theGood) setPPros(draft.theGood.join('\n'));
+        if (draft.theBad) setPCons(draft.theBad.join('\n'));
+        if (draft.targetAudience) setPTarget(draft.targetAudience);
+        if (draft.skipAudience) setPSkip(draft.skipAudience);
+        if (draft.dynamicScores) {
+          setDynamicScores(draft.dynamicScores);
+        }
+        showToast(`✨ Generated review draft with Gemini AI for ${pName}!`);
+      } else {
+        alert('Could not generate draft. Please ensure you are logged in as admin.');
+      }
+    } catch (e) {
+      console.error('Error generating AI review draft:', e);
+    } finally {
+      setIsGeneratingAiDraft(false);
+    }
   };
 
   const handlePublishProductAndReview = (e: React.FormEvent) => {
@@ -553,6 +600,34 @@ export default function AdminDashboardPage() {
             <p className="text-xs text-slate-500 mt-1">
               Add product specifications, TL;DR verdict, pros/cons, and category-tailored dynamic metric scores.
             </p>
+          </div>
+
+          {/* Gemini AI Review Assistant Bar */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  Gemini AI Review Co-Pilot
+                  <span className="text-[10px] font-extrabold uppercase bg-indigo-600 text-white px-2 py-0.5 rounded-full">GenAI</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Type the Product Name & Brand, then click to auto-draft laboratory verdicts, pros, cons, and dynamic metrics.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateAiDraft}
+              disabled={isGeneratingAiDraft}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all disabled:opacity-50 shrink-0"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isGeneratingAiDraft ? 'animate-spin' : ''}`} />
+              <span>{isGeneratingAiDraft ? 'Generating Draft...' : 'Auto-Draft with Gemini AI'}</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
