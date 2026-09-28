@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { CommunityReview, CategoryMetric } from '../types';
 import { StarRating } from './StarRating';
+import { ImageUploader } from './ImageUploader';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth-context';
-import { ThumbsUp, ShieldCheck, MessageSquarePlus, Check, X, User } from 'lucide-react';
+import { ThumbsUp, ShieldCheck, MessageSquarePlus, Check, X, User, Camera } from 'lucide-react';
 
 interface CommunityReviewsListProps {
   productId: string;
@@ -28,6 +29,7 @@ export function CommunityReviewsList({
   const [comment, setComment] = useState('');
   const [rating, setRating] = useState(5);
   const [verifiedBuyer, setVerifiedBuyer] = useState(true);
+  const [reviewPhoto, setReviewPhoto] = useState<string>('');
   const [metricScores, setMetricScores] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     metrics.forEach((m) => {
@@ -70,11 +72,13 @@ export function CommunityReviewsList({
       comment: comment.trim(),
       verifiedBuyer: Boolean(user) || verifiedBuyer,
       metricScores,
+      photos: reviewPhoto ? [reviewPhoto] : undefined,
     });
 
     setShowModal(false);
     setTitle('');
     setComment('');
+    setReviewPhoto('');
   };
 
   return (
@@ -158,6 +162,28 @@ export function CommunityReviewsList({
                 <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                   {rev.comment}
                 </p>
+
+                {/* User Attached Photos */}
+                {rev.photos && rev.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2.5 mt-3">
+                    {rev.photos.map((photo, pIdx) => (
+                      <div
+                        key={pIdx}
+                        className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 group cursor-pointer"
+                        onClick={() => window.open(photo, '_blank')}
+                      >
+                        <img
+                          src={photo}
+                          alt="Customer purchase"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-[9px] text-white font-bold text-center py-0.5">
+                          Buyer Photo
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Metric pill ratings if provided */}
                 {rev.metricScores && Object.keys(rev.metricScores).length > 0 && (
@@ -312,6 +338,16 @@ export function CommunityReviewsList({
                     />
                   </div>
                 ))}
+              </div>
+
+              {/* Attach Product Photo */}
+              <div className="pt-2">
+                <ImageUploader
+                  value={reviewPhoto}
+                  onChange={setReviewPhoto}
+                  label="Attach Real-World Product Photo (Optional)"
+                  helperText="Upload an authentic picture of your product to help other buyers verify your experience."
+                />
               </div>
 
               <div className="flex items-center gap-2">
