@@ -26,6 +26,7 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.16.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.12",
